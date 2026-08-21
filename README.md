@@ -233,7 +233,9 @@ forgejo user key delete --self 42 --yes
 
 # GPG keys (self-only writes; reads work for any user)
 forgejo user gpg list --self
-forgejo user gpg add --self --armored=@./mykey.asc
+forgejo user gpg add --self --armored=@./mykey.asc [--verify]
+forgejo user gpg verify --self --key-id=ABCD1234EF567890 [--signature=@./sig.asc]
+forgejo user gpg token --self
 forgejo user gpg delete --self 7 --yes
 
 # Access tokens (username always required; SHA1 shown ONCE at creation)
@@ -242,11 +244,22 @@ forgejo user token create alice --name=ci --scopes=read:repo,write:issue
 forgejo user token delete alice ci --yes
 ```
 
+Key verification flow: `add` without `--verify` registers the key but
+leaves it **unverified** — Forgejo only renders a commit signature as valid
+when the signing key is verified. `verify` completes the challenge/response
+flow: the CLI fetches a single-use token, signs it locally with the key's
+secret half, and submits the armored signature. `user gpg token --self`
+prints that raw token without signing, for callers that sign elsewhere
+(HSM, remote agent, separate container); `--signature=@FILE` submits a
+signature you already produced instead of signing locally. The token is
+single-use and expires after about a minute — fetch, sign, and submit in a
+single `verify` invocation.
+
 Notes:
 - `org member add` is not exposed by the Forgejo API. Add users to an org
   by adding them to one of its teams.
-- `user gpg add/delete` for another user is not exposed by the Forgejo
-  API. Self-add only via `--self`.
+- `user gpg add/delete/verify/token` for another user is not exposed by the
+  Forgejo API. Self-only via `--self`.
 - `user token` verbs require **HTTP Basic Auth** (Forgejo refuses bearer
   tokens on these endpoints). Set `FORGEJO_PASSWORD=your-account-password`
   in `~/.config/forgejo-cli/config` to enable them. You can only manage
@@ -312,7 +325,9 @@ All commands support `--json` for raw API output.
 
 `bash`, `curl`, `jq`. The script checks for these at startup and exits with
 an install hint if missing. `zstd` is additionally needed only if you set
-`FORGEJO_LOG_PATH` to read action logs from disk.
+`FORGEJO_LOG_PATH` to read action logs from disk. `gpg` (`gnupg`) is
+additionally needed only for `user gpg verify` and `user gpg add --verify` —
+both check at point of use, not at startup.
 
 ## License
 
